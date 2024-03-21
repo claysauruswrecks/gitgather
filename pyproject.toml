@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gitgather"
+version = "0.0.1"
+authors = [
+  { name = "claysauruswrecks", email = "44852834+claysauruswrecks@users.noreply.github.com" },
+]
+description = "A small example package"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: OS Independent",
+]
+
+[project.scripts]
+gitgather = "gitgather.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/claysauruswrecks/gitgather"
+Issues = "https://github.com/claysauruswrecks/gitgather/issues"
+
+[tool.hatch.build.targets.wheel]
+src-dir = "src" # Specify the source directory for your package
+
+[tool.hatch.build.targets.sdist]
+src-dir = "src" # Specify the source directory for your package
