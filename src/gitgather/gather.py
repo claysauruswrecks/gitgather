@@ -6,14 +6,14 @@ import fnmatch
 
 def capture_tree_output(repo_path, exclude_patterns=None):
     """Capture the directory tree structure using the `tree` command, excluding specified patterns."""
-    exclude_patterns = exclude_patterns or [
-        ".git"
-    ]  # Default to excluding .git if no patterns specified
-    exclude_option = "|".join(exclude_patterns)
+    exclude_patterns = exclude_patterns or []
+    exclude_option = []
+    for pattern in exclude_patterns:
+        exclude_option.extend(["-I", pattern])
 
     try:
         tree_output = subprocess.check_output(
-            ["tree", repo_path, "-I", exclude_option], text=True
+            ["tree", repo_path, *exclude_option], text=True
         )
         return tree_output
     except subprocess.CalledProcessError as e:
@@ -34,30 +34,33 @@ def get_git_files(repo_path):
     return tracked_files
 
 
-def match_patterns(filepath, patterns):
-    """Check if the filepath matches any of the given patterns."""
-    return any(
-        fnmatch.fnmatch(filepath, pattern)
-        or fnmatch.fnmatch(os.path.basename(filepath), pattern)
-        for pattern in patterns
-    )
+def match_patterns(path, patterns, base_path):
+    """Check if the path matches any of the given patterns."""
+    relative_path = os.path.relpath(path, start=base_path)
+    for pattern in patterns:
+        if os.path.isdir(os.path.join(base_path, pattern)):
+            # Directory pattern
+            if relative_path == pattern or relative_path.startswith(pattern + os.sep):
+                return True
+        elif fnmatch.fnmatch(relative_path, pattern) or fnmatch.fnmatch(
+            os.path.basename(relative_path), pattern
+        ):
+            # File pattern
+            return True
+    return False
 
 
-def apply_filters(files, include_patterns=None, exclude_patterns=None):
-    """Filter the files based on include and exclude patterns."""
-    filtered_files = files
+def apply_filters(paths, repo_path, include_patterns=None, exclude_patterns=None):
+    filtered_paths = []
 
-    if include_patterns:
-        filtered_files = [
-            f for f in filtered_files if match_patterns(f, include_patterns)
-        ]
+    for path in paths:
+        if exclude_patterns and match_patterns(path, exclude_patterns, repo_path):
+            continue
+        if include_patterns and not match_patterns(path, include_patterns, repo_path):
+            continue
+        filtered_paths.append(path)
 
-    if exclude_patterns:
-        filtered_files = [
-            f for f in filtered_files if not match_patterns(f, exclude_patterns)
-        ]
-
-    return filtered_files
+    return filtered_paths
 
 
 def generate_repo_overview(
@@ -74,8 +77,6 @@ def generate_repo_overview(
     logging.basicConfig(level=logging.DEBUG if verbose else logging.INFO)
     repo_path = os.path.abspath(repo_path)
 
-    tree_output = capture_tree_output(repo_path, exclude)
-
     if no_git:
         file_paths = [
             os.path.join(dp, f)
@@ -85,12 +86,22 @@ def generate_repo_overview(
     else:
         file_paths = [os.path.join(repo_path, f) for f in get_git_files(repo_path)]
 
-    file_paths = apply_filters(file_paths, include, exclude)
+    if exclude:
+        exclude_patterns = [os.path.join(repo_path, pattern) for pattern in exclude]
+        file_paths = [
+            path
+            for path in file_paths
+            if not match_patterns(path, exclude_patterns, repo_path)
+        ]
+
+    filtered_file_paths = apply_filters(file_paths, repo_path, include, exclude)
+
+    tree_output = capture_tree_output(repo_path, exclude)
 
     with open(output_file, "w", encoding="utf-8") as outfile:
         outfile.write(f"```\n{tree_output}\n```\n\n")
 
-        for filepath in file_paths:
+        for filepath in filtered_file_paths:
             relative_path = os.path.relpath(filepath, start=repo_path)
             try:
                 logging.info(f"Processing file: {relative_path}")
