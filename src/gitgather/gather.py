@@ -4,6 +4,9 @@ import logging
 import fnmatch
 from typing import LiteralString
 
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 
 def capture_tree_output(repo_path, filtered_file_paths):
     """Capture the directory tree structure using the filtered file paths."""
@@ -84,115 +87,81 @@ def is_glob_pattern(pattern):
     return any(char in pattern for char in "*?[]")
 
 
-import os
-import fnmatch
-import logging
-
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
-
-
 def apply_filters(paths, repo_path, include_patterns=None, exclude_patterns=None):
+    if logger.isEnabledFor(logging.DEBUG):
+        debug = True
+    include_patterns = include_patterns or []
+    exclude_patterns = exclude_patterns or []
+
+    include_globs = [p for p in include_patterns if is_glob_pattern(p)]
+    include_files = [p for p in include_patterns if not is_glob_pattern(p)]
+    exclude_globs = [p for p in exclude_patterns if is_glob_pattern(p)]
+    exclude_files = [p for p in exclude_patterns if not is_glob_pattern(p)]
+
+    if debug:
+        logger.debug("Include globs: %s", include_globs)
+        logger.debug("Include files: %s", include_files)
+        logger.debug("Exclude globs: %s", exclude_globs)
+        logger.debug("Exclude files: %s", exclude_files)
+
+    def is_excluded(path):
+        rel_path = os.path.relpath(path, start=repo_path)
+        return any(rel_path == pattern for pattern in exclude_files) or any(
+            rel_path.startswith(pattern + os.sep) for pattern in exclude_files
+        )
+
+    def is_included(path):
+        rel_path = os.path.relpath(path, start=repo_path)
+        return any(
+            rel_path.startswith(pattern + os.sep) for pattern in include_files
+        ) or any(os.path.basename(path) == pattern for pattern in include_files)
+
+    def matches_glob(path, glob_patterns):
+        rel_path = os.path.relpath(path, start=repo_path)
+        return any(fnmatch.fnmatch(rel_path, pattern) for pattern in glob_patterns)
+
     filtered_paths = []
-
-    include_globs = (
-        [pattern for pattern in include_patterns if is_glob_pattern(pattern)]
-        if include_patterns
-        else []
-    )
-    include_files = (
-        [pattern for pattern in include_patterns if not is_glob_pattern(pattern)]
-        if include_patterns
-        else []
-    )
-    exclude_globs = (
-        [pattern for pattern in exclude_patterns if is_glob_pattern(pattern)]
-        if exclude_patterns
-        else []
-    )
-    exclude_files = (
-        [pattern for pattern in exclude_patterns if not is_glob_pattern(pattern)]
-        if exclude_patterns
-        else []
-    )
-
-    logger.debug(f"Include globs: {include_globs}")
-    logger.debug(f"Include files: {include_files}")
-    logger.debug(f"Exclude globs: {exclude_globs}")
-    logger.debug(f"Exclude files: {exclude_files}")
-
     for path in paths:
-        logger.debug(f"Processing path: {path}")
+        if debug:
+            logger.debug("Processing path: %s", path)
 
-        # Check exclude file patterns first
-        if any(
-            os.path.relpath(path, start=repo_path) == pattern
-            for pattern in exclude_files
-        ):
-            logger.debug(f"Path {path} matches exclude file pattern, skipping")
+        if is_excluded(path):
+            if debug:
+                logger.debug("Path %s is excluded, skipping", path)
             continue
 
-        # Check exclude directory patterns
-        if any(
-            os.path.relpath(path, start=repo_path).startswith(pattern + os.sep)
-            for pattern in exclude_files
-        ):
-            logger.debug(f"Path {path} is in an excluded directory, skipping")
-            continue
-
-        # Check include directory patterns
-        logger.debug("path: %s, include_files: %s", path, include_files)
-        if any(
-            os.path.relpath(path, start=repo_path).startswith(pattern + os.sep)
-            for pattern in include_files
-        ):
-            logger.debug(f"Path {path} is in an included directory, adding")
+        if is_included(path):
+            if debug:
+                logger.debug("Path %s is included, adding", path)
             filtered_paths.append(path)
             continue
 
-        # Check include file patterns
-        logger.debug("path: %s, include_file: %s", path, include_files)
-        if any(os.path.basename(path) == pattern for pattern in include_files):
-            logger.debug(
-                f"Path {path} matches include file pattern, adding to filtered paths"
-            )
-            filtered_paths.append(path)
-            continue
-
-        # Process glob patterns
         if include_globs:
-            if any(
-                fnmatch.fnmatch(os.path.relpath(path, start=repo_path), pattern)
-                for pattern in include_globs
+            if matches_glob(path, include_globs) and not matches_glob(
+                path, exclude_globs
             ):
-                logger.debug(f"Path {path} matches include glob pattern")
-                if not any(
-                    fnmatch.fnmatch(os.path.relpath(path, start=repo_path), pattern)
-                    for pattern in exclude_globs
-                ):
-                    logger.debug(
-                        f"Path {path} does not match exclude glob pattern, adding to filtered paths"
-                    )
-                    filtered_paths.append(path)
-                else:
-                    logger.debug(f"Path {path} matches exclude glob pattern, skipping")
-            else:
-                logger.debug(
-                    f"Path {path} does not match include glob pattern, skipping"
-                )
-        else:
-            if not any(
-                fnmatch.fnmatch(os.path.relpath(path, start=repo_path), pattern)
-                for pattern in exclude_globs
-            ):
-                logger.debug(
-                    f"Path {path} does not match exclude glob pattern, adding to filtered paths"
-                )
+                if debug:
+                    logger.debug("Path %s matches include glob pattern, adding", path)
                 filtered_paths.append(path)
             else:
-                logger.debug(f"Path {path} matches exclude glob pattern, skipping")
+                if debug:
+                    logger.debug(
+                        "Path %s does not match include glob pattern or matches exclude glob pattern, skipping",
+                        path,
+                    )
+        else:
+            if not matches_glob(path, exclude_globs):
+                if debug:
+                    logger.debug(
+                        "Path %s does not match exclude glob pattern, adding", path
+                    )
+                filtered_paths.append(path)
+            else:
+                if debug:
+                    logger.debug("Path %s matches exclude glob pattern, skipping", path)
 
-    logger.debug(f"Filtered paths: {filtered_paths}")
+    if debug:
+        logger.debug("Filtered paths: %s", filtered_paths)
     return filtered_paths
 
 
