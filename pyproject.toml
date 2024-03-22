@@ -17,6 +17,9 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 
+[project.optional-dependencies]
+test = ["build", "pytest >=8.1.1", "pytest-cov", "twine"]
+
 [project.scripts]
 gitgather = "gitgather.__main__:main"
 
