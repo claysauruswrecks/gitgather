@@ -88,6 +88,7 @@ def is_glob_pattern(pattern):
 
 
 def apply_filters(paths, repo_path, include_patterns=None, exclude_patterns=None):
+    debug = False
     if logger.isEnabledFor(logging.DEBUG):
         debug = True
     include_patterns = include_patterns or []
@@ -105,18 +106,32 @@ def apply_filters(paths, repo_path, include_patterns=None, exclude_patterns=None
         logger.debug("Exclude files: %s", exclude_files)
 
     def is_excluded(path):
+        if debug:
+            logger.debug(
+                "checking path %s against exclude_files %s", path, exclude_files
+            )
+        if path in exclude_files:
+            return True
         rel_path = os.path.relpath(path, start=repo_path)
         return any(rel_path == pattern for pattern in exclude_files) or any(
             rel_path.startswith(pattern + os.sep) for pattern in exclude_files
         )
 
     def is_included(path):
+        if debug:
+            logger.debug(
+                "checking path %s against include_files %s", path, include_files
+            )
+        if path in include_files:
+            return True
         rel_path = os.path.relpath(path, start=repo_path)
         return any(
             rel_path.startswith(pattern + os.sep) for pattern in include_files
         ) or any(os.path.basename(path) == pattern for pattern in include_files)
 
     def matches_glob(path, glob_patterns):
+        if debug:
+            logging.debug("checking %s against glob_patterns %s", path, glob_patterns)
         rel_path = os.path.relpath(path, start=repo_path)
         return any(fnmatch.fnmatch(rel_path, pattern) for pattern in glob_patterns)
 
@@ -127,7 +142,10 @@ def apply_filters(paths, repo_path, include_patterns=None, exclude_patterns=None
 
         if is_excluded(path):
             if debug:
-                logger.debug("Path %s is excluded, skipping", path)
+                logger.debug(
+                    "Path %s is excluded, skipping",
+                    path,
+                )
             continue
 
         if is_included(path):
@@ -141,24 +159,36 @@ def apply_filters(paths, repo_path, include_patterns=None, exclude_patterns=None
                 path, exclude_globs
             ):
                 if debug:
-                    logger.debug("Path %s matches include glob pattern, adding", path)
+                    logger.debug(
+                        "Path %s matches include glob pattern %s, adding",
+                        path,
+                        include_globs,
+                    )
                 filtered_paths.append(path)
             else:
                 if debug:
                     logger.debug(
-                        "Path %s does not match include glob pattern or matches exclude glob pattern, skipping",
+                        "Path %s does not match include glob %s or matches exclude glob %s, skipping",
                         path,
+                        include_globs,
+                        exclude_globs,
                     )
         else:
             if not matches_glob(path, exclude_globs):
                 if debug:
                     logger.debug(
-                        "Path %s does not match exclude glob pattern, adding", path
+                        "Path %s does not match exclude glob pattern %s, adding",
+                        path,
+                        exclude_globs,
                     )
                 filtered_paths.append(path)
             else:
                 if debug:
-                    logger.debug("Path %s matches exclude glob pattern, skipping", path)
+                    logger.debug(
+                        "Path %s matches exclude glob pattern %s, skipping",
+                        path,
+                        exclude_globs,
+                    )
 
     if debug:
         logger.debug("Filtered paths: %s", filtered_paths)
