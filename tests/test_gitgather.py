@@ -30,7 +30,13 @@ def test_repo() -> Generator[str, Any, None]:
 
 
 def test_capture_tree_output(test_repo: str) -> None:
-    tree_output: str = capture_tree_output(repo_path=test_repo)
+    filtered_file_paths = [
+        f"{test_repo}/file1.txt",
+        f"{test_repo}/file2.txt",
+    ]
+    tree_output: str = capture_tree_output(
+        repo_path=test_repo, filtered_file_paths=filtered_file_paths
+    )
     assert "file1.txt" in tree_output
     assert "file2.txt" in tree_output
 
@@ -279,7 +285,7 @@ def test_nogit_exclude_multiple_patterns(test_repo):
         )
 
 
-def test_include_specific_patterns(test_repo):
+def test_nogitfalse_include_specific_patterns(test_repo):
     # Create additional files
     with open(os.path.join(test_repo, "file3.txt"), "w") as f:
         f.write("File 3 contents")
