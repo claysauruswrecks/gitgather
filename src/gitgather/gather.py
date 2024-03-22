@@ -208,21 +208,37 @@ def generate_repo_overview(
 ):
     # ...
 
+    all_file_paths = [
+        os.path.join(dp, f)
+        for dp, _, filenames in os.walk(repo_path)
+        for f in filenames
+    ]
+
     if no_git:
-        file_paths = [
-            os.path.join(dp, f)
-            for dp, _, filenames in os.walk(repo_path)
-            for f in filenames
-        ]
+        file_paths = all_file_paths
     else:
         file_paths = [os.path.join(repo_path, f) for f in get_git_files(repo_path)]
 
-    if exclude:
-        exclude_patterns = [os.path.join(repo_path, pattern) for pattern in exclude]
-    else:
-        exclude_patterns = []
+    prefiltered_file_paths = apply_filters(
+        paths=file_paths,
+        repo_path=repo_path,
+        include_patterns=include,
+        exclude_patterns=exclude,
+    )
 
-    filtered_file_paths = apply_filters(file_paths, repo_path, include, exclude)
+    if include:
+        all_included_filtered_file_paths = apply_filters(
+            paths=all_file_paths,
+            repo_path=repo_path,
+            include_patterns=include,
+            exclude_patterns=exclude,
+        )
+
+        filtered_file_paths = list(
+            set(prefiltered_file_paths + all_included_filtered_file_paths)
+        )
+    else:
+        filtered_file_paths = prefiltered_file_paths
 
     if tree_output:
         tree_lines = capture_tree_output(

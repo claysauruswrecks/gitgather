@@ -291,10 +291,18 @@ def test_nogitfalse_include_specific_patterns(test_repo):
         f.write("File 3 contents")
     with open(os.path.join(test_repo, "file4.md"), "w") as f:
         f.write("File 4 contents")
+    with open(os.path.join(test_repo, "file5.rtf"), "w") as f:
+        f.write("File 5 contents")
+    with open(os.path.join(test_repo, "file6.rtf"), "w") as f:
+        f.write("File 6 contents")
+    with open(os.path.join(test_repo, "file7.rtf"), "w") as f:
+        f.write("File 7 contents")
 
     # Generate the repository overview with specific include patterns
     output_file = os.path.join(test_repo, "output.txt")
-    generate_repo_overview(test_repo, output_file, include=["*.txt"], no_git=False)
+    generate_repo_overview(
+        test_repo, output_file, include=["*.txt", "file5.rtf"], no_git=False
+    )
 
     # Check that only the included files are present in the output
     with open(output_file, "r") as f:
@@ -303,6 +311,7 @@ def test_nogitfalse_include_specific_patterns(test_repo):
         assert "file2.txt" in content
         assert "file3.txt" in content
         assert "file4.md" not in content
+        assert "file5.rtf" in content
 
 
 def test_empty_repository():
@@ -314,10 +323,13 @@ def test_empty_repository():
         assert os.path.exists(output_file)
         with open(output_file, "r") as f:
             content = f.read()
-            assert content.strip() == ""
+            assert content.strip() == "```\n.\n```"
 
 
 def test_nested_directories(test_repo):
+    # Remove the .git dir because no_git=True
+    shutil.rmtree(f"{test_repo}/.git")
+
     # Create nested directories and files
     os.makedirs(os.path.join(test_repo, "dir1", "subdir1"))
     os.makedirs(os.path.join(test_repo, "dir2", "subdir2"))
@@ -338,6 +350,9 @@ def test_nested_directories(test_repo):
 
 
 def test_symbolic_links(test_repo):
+    # Remove the .git dir because no_git=True
+    shutil.rmtree(f"{test_repo}/.git")
+
     # Create a symbolic link
     os.symlink("file1.txt", os.path.join(test_repo, "symlink.txt"))
 
@@ -352,6 +367,9 @@ def test_symbolic_links(test_repo):
 
 
 def test_special_characters(test_repo):
+    # Remove the .git dir because no_git=True
+    shutil.rmtree(f"{test_repo}/.git")
+
     # Create files with special characters in their names
     with open(os.path.join(test_repo, "file with spaces.txt"), "w") as f:
         f.write("File with spaces contents")
