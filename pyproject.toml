@@ -8,7 +8,7 @@ version = "0.0.1"
 authors = [
   { name = "claysauruswrecks", email = "44852834+claysauruswrecks@users.noreply.github.com" },
 ]
-description = "A small example package"
+description = "A simple tool to gather source code from a local repo or folder into a single file for LLM context windows."
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
