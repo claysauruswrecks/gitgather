@@ -62,7 +62,7 @@ def get_git_files(repo_path):
         ) as proc:
             tracked_files = proc.stdout.read().splitlines()
     except subprocess.CalledProcessError as e:
-        logging.error(f"Failed to get Git files: {e}")
+        logging.error("Failed to get Git files: %s", e)
         tracked_files = []
     return tracked_files
 
@@ -206,26 +206,48 @@ def generate_repo_overview(
     verbose=False,
     tree_output=True,
 ):
-    # ...
+    """
+    Generate an overview of a Git repository by concatenating file contents.
 
+    Args:
+        repo_path (str): Path to the Git repository.
+        output_file (str): Output file path.
+        include (list, optional): List of file patterns to include. Defaults to None.
+        exclude (list, optional): List of file patterns to exclude. Defaults to None.
+        no_git (bool, optional): Include all files, not just those tracked by Git. Defaults to False.
+        all_files (bool, optional): Include all files, including hidden ones. Defaults to False.
+        no_dotfiles (bool, optional): Exclude dotfiles. Defaults to False.
+        verbose (bool, optional): Enable verbose output. Defaults to False.
+        tree_output (bool, optional): Include directory tree structure in the output. Defaults to True.
+
+    Returns:
+        None
+    """
+    # Get all file paths in the repository
     all_file_paths = [
         os.path.join(dp, f)
         for dp, _, filenames in os.walk(repo_path)
         for f in filenames
     ]
+    logger.debug("All file paths: %s", all_file_paths)
 
+    # Determine the file paths to process based on the `no_git` flag
     if no_git:
         file_paths = all_file_paths
     else:
         file_paths = [os.path.join(repo_path, f) for f in get_git_files(repo_path)]
+    logger.debug("File paths to process: %s", file_paths)
 
+    # Apply filters to the file paths
     prefiltered_file_paths = apply_filters(
         paths=file_paths,
         repo_path=repo_path,
         include_patterns=include,
         exclude_patterns=exclude,
     )
+    logger.debug("Prefiltered file paths: %s", prefiltered_file_paths)
 
+    # If `include` patterns are provided, apply filters to all file paths as well
     if include:
         all_included_filtered_file_paths = apply_filters(
             paths=all_file_paths,
@@ -233,30 +255,40 @@ def generate_repo_overview(
             include_patterns=include,
             exclude_patterns=exclude,
         )
+        logger.debug(
+            "All included filtered file paths: %s", all_included_filtered_file_paths
+        )
 
+        # Combine the prefiltered and all included filtered file paths
         filtered_file_paths = list(
             set(prefiltered_file_paths + all_included_filtered_file_paths)
         )
     else:
         filtered_file_paths = prefiltered_file_paths
+    logger.debug("Final filtered file paths: %s", filtered_file_paths)
 
+    # Generate the directory tree structure if `tree_output` is True
     if tree_output:
         tree_lines = capture_tree_output(
             repo_path=repo_path, filtered_file_paths=filtered_file_paths
         )
+        logger.debug("Directory tree structure:\n%s", tree_lines)
 
+    # Write the repository overview to the output file
     with open(output_file, "w", encoding="utf-8") as outfile:
+        # Write the directory tree structure if `tree_output` is True
         if tree_output:
             outfile.write(f"```\n{tree_lines}\n```\n\n")
 
+        # Process each filtered file path
         for filepath in filtered_file_paths:
             relative_path = os.path.relpath(filepath, start=repo_path)
             try:
-                logging.info(f"Processing file: {relative_path}")
+                logger.info(f"Processing file: {relative_path}")
                 with open(filepath, "r", encoding="utf-8", errors="ignore") as file:
                     file_contents = file.read()
                     outfile.write(
                         f"File: {relative_path}\n```\n{file_contents}\n```\n\n"
                     )
             except Exception as e:
-                logging.error(f"Failed to process {filepath}: {e}")
+                logger.error(f"Failed to process {filepath}: {e}")
