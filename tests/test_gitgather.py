@@ -2,6 +2,7 @@ import os
 import tempfile
 import shutil
 import subprocess
+from typing import Generator
 import pytest
 from gitgather.gather import (
     capture_tree_output,
@@ -11,96 +12,173 @@ from gitgather.gather import (
     generate_repo_overview,
 )
 
+from typing import Any
+
 
 @pytest.fixture
-def test_repo():
-    temp_dir = tempfile.mkdtemp()
-    subprocess.run(["git", "init"], cwd=temp_dir)
-    with open(os.path.join(temp_dir, "file1.txt"), "w") as f:
+def test_repo() -> Generator[str, Any, None]:
+    temp_dir: str = tempfile.mkdtemp()
+    subprocess.run(args=["git", "init"], cwd=temp_dir)
+    with open(file=os.path.join(temp_dir, "file1.txt"), mode="w") as f:
         f.write("File 1 contents")
-    with open(os.path.join(temp_dir, "file2.txt"), "w") as f:
+    with open(file=os.path.join(temp_dir, "file2.txt"), mode="w") as f:
         f.write("File 2 contents")
-    subprocess.run(["git", "add", "."], cwd=temp_dir)
-    subprocess.run(["git", "commit", "-m", "Initial commit"], cwd=temp_dir)
+    subprocess.run(args=["git", "add", "."], cwd=temp_dir)
+    subprocess.run(args=["git", "commit", "-m", "Initial commit"], cwd=temp_dir)
     yield temp_dir
     shutil.rmtree(temp_dir)
 
 
-def test_capture_tree_output(test_repo):
-    tree_output = capture_tree_output(test_repo)
+def test_capture_tree_output(test_repo: str) -> None:
+    tree_output: str = capture_tree_output(repo_path=test_repo)
     assert "file1.txt" in tree_output
     assert "file2.txt" in tree_output
 
 
-def test_get_git_files(test_repo):
-    git_files = get_git_files(test_repo)
+def test_get_git_files(test_repo: str) -> None:
+    git_files: list[str] = get_git_files(repo_path=test_repo)
     assert "file1.txt" in git_files
     assert "file2.txt" in git_files
 
 
-def test_match_patterns():
-    assert match_patterns("file1.txt", ["*.txt"])
-    assert not match_patterns("file1.txt", ["*.md"])
+def test_match_patterns(test_repo: str) -> None:
+    assert match_patterns(path="file1.txt", patterns=["*.txt"], base_path=test_repo)
+    assert match_patterns(
+        path=f"{test_repo}/file1.txt", patterns=["*.txt"], base_path=test_repo
+    )
+    assert not match_patterns(path="file1.txt", patterns=["*.md"], base_path=test_repo)
+    assert not match_patterns(
+        path=f"{test_repo}/file1.txt", patterns=["*.md"], base_path=test_repo
+    )
 
 
-def test_apply_filters():
-    files = ["file1.txt", "file2.md", "file3.txt"]
-    filtered_files = apply_filters(files, ["*.txt"], ["file1.txt"])
+def test_apply_filters(test_repo: str) -> None:
+    files: list[str] = ["file1.txt", "file2.md", "file3.txt"]
+    filtered_files: list = apply_filters(
+        paths=files,
+        repo_path=test_repo,
+        include_patterns=["*.txt"],
+        exclude_patterns=["file1.txt"],
+    )
     assert "file3.txt" in filtered_files
     assert "file1.txt" not in filtered_files
     assert "file2.md" not in filtered_files
 
 
-def test_generate_repo_overview(test_repo):
-    output_file = os.path.join(test_repo, "output.txt")
-    generate_repo_overview(test_repo, output_file)
-    with open(output_file, "r") as f:
-        content = f.read()
-        assert "file1.txt" in content
-        assert "file2.txt" in content
+def test_generate_repo_overview(test_repo: str) -> None:
+    output_file: str = os.path.join(test_repo, "output.txt")
+    # Run it without tree output.
+    generate_repo_overview(
+        repo_path=test_repo, output_file=output_file, tree_output=False
+    )
+    with open(file=output_file, mode="r") as f:
+        content: str = f.read()
+        assert content.count("file1.txt") == 1
+        assert content.count("file2.txt") == 1
         assert "File 1 contents" in content
         assert "File 2 contents" in content
 
+    # Run it again with the tree output enabled.
+    generate_repo_overview(
+        repo_path=test_repo, output_file=output_file, tree_output=True
+    )
+    with open(file=output_file, mode="r") as f:
+        content = f.read()
+        # Filenames should exist twice from tree and overview.
+        assert content.count("file1.txt") == 2
+        assert content.count("file2.txt") == 2
 
-def test_nogit_and_exclude_git_directory(test_repo):
+        # Contents should be present once.
+        assert content.count("File 1 contents") == 1
+        assert content.count("File 2 contents") == 1
+
+
+def test_nogit_and_exclude_git_directory(test_repo: str) -> None:
     # Create a non-Git file in the repository
-    with open(os.path.join(test_repo, "file.txt"), "w") as f:
+    with open(file=os.path.join(test_repo, "file.txt"), mode="w") as f:
         f.write("Regular file")
 
-    # Generate the repository overview with --no-git and --exclude .git options
-    output_file = os.path.join(test_repo, "output.txt")
-    generate_repo_overview(test_repo, output_file, exclude=[".git"], no_git=True)
+    # Generate the repository overview with --no-git and --exclude .git options.
+    output_file: str = os.path.join(test_repo, "output.txt")
+    generate_repo_overview(
+        repo_path=test_repo, output_file=output_file, exclude=[".git"], no_git=True
+    )
 
-    # Check that the .git directory and its contents are not included in the output
-    with open(output_file, "r") as f:
+    # Check that the .git directory and its contents are not included in the output.
+    with open(file=output_file, mode="r") as f:
         content = f.read()
         assert ".git/config" not in content
         assert ".git/HEAD" not in content
 
-    # Check that the non-Git file is included in the output
-    with open(output_file, "r") as f:
+    with open(file=output_file, mode="r") as f:
         content = f.read()
+        # Check that the non-Git file is included in the output.
         assert "file.txt" in content
+        assert content.count("file.txt") == 2
+
+        # Git files should be in here as well.
+        assert content.count("file1.txt") == 2
+        assert content.count("file2.txt") == 2
+
+        # Contents should be present once.
+        assert content.count("File 1 contents") == 1
+        assert content.count("File 2 contents") == 1
 
 
-def test_exclude_multiple_patterns(test_repo):
+def test_nogit_exclude_multiple_patterns(test_repo):
     # Create additional files and directories
     os.makedirs(os.path.join(test_repo, "dir1"))
     os.makedirs(os.path.join(test_repo, "dir2"))
+    os.makedirs(os.path.join(test_repo, "dir3"))
+    os.makedirs(os.path.join(test_repo, "dir4"))
+    # Should not be included.
     with open(os.path.join(test_repo, "file3.txt"), "w") as f:
         f.write("File 3 contents")
+
+    # Should be included
     with open(os.path.join(test_repo, "file4.md"), "w") as f:
         f.write("File 4 contents")
+    with open(os.path.join(test_repo, "file5.md"), "w") as f:
+        f.write("File 5 contents")
+
+    # Make sure we create a file in this directory so dir2 is included.
+    with open(os.path.join(f"{test_repo}/dir2", "file6.md"), "w") as f:
+        f.write("File 6 contents")
+    # Make sure they're sorted.
+    with open(os.path.join(f"{test_repo}/dir2", "file7.md"), "w") as f:
+        f.write("File 7 contents")
+
+    # This directory should not be included.
+    with open(os.path.join(f"{test_repo}/dir3", "file8.txt"), "w") as f:
+        f.write("File 8 contents")
+
+    # This directory should be included.
+    with open(os.path.join(f"{test_repo}/dir4", "file9.md"), "w") as f:
+        f.write("File 9 contents")
+    with open(os.path.join(f"{test_repo}/dir4", "file10.md"), "w") as f:
+        f.write("File 10 contents")
+    # But not this file.
+    with open(os.path.join(f"{test_repo}/dir4", "file11.txt"), "w") as f:
+        f.write("File 11 contents")
+
+    # Put some matching inclusion files in dir1 to be excluded.
+    with open(os.path.join(f"{test_repo}/dir1", "file12.md"), "w") as f:
+        f.write("File 12 contents")
 
     # Generate the repository overview with multiple exclude patterns
     output_file = os.path.join(test_repo, "output.txt")
+    # exclude .git directory here, because file1.txt is contained in .git/index
     generate_repo_overview(
-        test_repo, output_file, exclude=["*.txt", "dir1"], no_git=True
+        repo_path=test_repo,
+        output_file=output_file,
+        exclude=["*.txt", "dir1", ".git"],
+        no_git=True,
     )
 
     # Check that the excluded files and directories are not included in the output
     with open(output_file, "r") as f:
         content = f.read()
+        assert ".git" not in content
         assert "file1.txt" not in content
         assert "file2.txt" not in content
         assert "file3.txt" not in content
@@ -111,6 +189,20 @@ def test_exclude_multiple_patterns(test_repo):
         content = f.read()
         assert "file4.md" in content
         assert "dir2" in content
+        assert (
+            content.count(
+                """.\n"""
+                """├── dir2\n"""
+                """│   ├── file6.md\n"""
+                """│   └── file7.md\n"""
+                """├── dir4\n"""
+                """│   ├── file10.md\n"""
+                """│   └── file9.md\n"""
+                """├── file4.md\n"""
+                """└── file5.md\n"""
+            )
+            == 1
+        )
 
 
 def test_include_specific_patterns(test_repo):
@@ -122,7 +214,7 @@ def test_include_specific_patterns(test_repo):
 
     # Generate the repository overview with specific include patterns
     output_file = os.path.join(test_repo, "output.txt")
-    generate_repo_overview(test_repo, output_file, include=["*.txt"], no_git=True)
+    generate_repo_overview(test_repo, output_file, include=["*.txt"], no_git=False)
 
     # Check that only the included files are present in the output
     with open(output_file, "r") as f:
