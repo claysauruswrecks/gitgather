@@ -53,16 +53,18 @@ def test_match_patterns(test_repo: str) -> None:
 
 
 def test_apply_filters(test_repo: str) -> None:
-    files: list[str] = ["file1.txt", "file2.md", "file3.txt"]
+    files: list[str] = ["file1.txt", "file2.md", "file3.txt", "file4.rtf", "file5.rtf"]
     filtered_files: list = apply_filters(
         paths=files,
         repo_path=test_repo,
-        include_patterns=["*.txt"],
-        exclude_patterns=["file1.txt"],
+        include_patterns=["*.txt", "file4.rtf"],
+        exclude_patterns=["file1.txt", "*.rtf"],
     )
     assert "file3.txt" in filtered_files
+    assert "file4.rtf" in filtered_files
     assert "file1.txt" not in filtered_files
     assert "file2.md" not in filtered_files
+    assert "file5.rtf" not in filtered_files
 
 
 def test_generate_repo_overview(test_repo: str) -> None:
@@ -131,6 +133,9 @@ def test_nogit_exclude_multiple_patterns(test_repo):
     os.makedirs(os.path.join(test_repo, "dir2"))
     os.makedirs(os.path.join(test_repo, "dir3"))
     os.makedirs(os.path.join(test_repo, "dir4"))
+    os.makedirs(os.path.join(test_repo, "dir5"))
+    os.makedirs(os.path.join(test_repo, "dir6"))
+    os.makedirs(os.path.join(test_repo, "dir7"))
     # Should not be included.
     with open(os.path.join(test_repo, "file3.txt"), "w") as f:
         f.write("File 3 contents")
@@ -165,12 +170,21 @@ def test_nogit_exclude_multiple_patterns(test_repo):
     with open(os.path.join(f"{test_repo}/dir1", "file12.md"), "w") as f:
         f.write("File 12 contents")
 
+    # Put some matching exclusion files in dir5 to be included by filename.
+    with open(os.path.join(f"{test_repo}/dir5", "file13.txt"), "w") as f:
+        f.write("File 13 contents")
+
+    # Put some matching exclusion files in dir6 to be included by directory.
+    with open(os.path.join(f"{test_repo}/dir6", "file14.txt"), "w") as f:
+        f.write("File 14 contents")
+
     # Generate the repository overview with multiple exclude patterns
     output_file = os.path.join(test_repo, "output.txt")
     # exclude .git directory here, because file1.txt is contained in .git/index
     generate_repo_overview(
         repo_path=test_repo,
         output_file=output_file,
+        include=["file13.txt", "dir6"],
         exclude=["*.txt", "dir1", ".git"],
         no_git=True,
     )
@@ -178,17 +192,30 @@ def test_nogit_exclude_multiple_patterns(test_repo):
     # Check that the excluded files and directories are not included in the output
     with open(output_file, "r") as f:
         content = f.read()
+        assert "dir1" not in content
+        assert "dir6" not in content
         assert ".git" not in content
         assert "file1.txt" not in content
         assert "file2.txt" not in content
         assert "file3.txt" not in content
-        assert "dir1" not in content
+        assert "file8.txt" not in content
+        assert "file11.txt" not in content
+        assert "file12.md" not in content
 
     # Check that the non-excluded files and directories are included in the output
     with open(output_file, "r") as f:
         content = f.read()
-        assert "file4.md" in content
         assert "dir2" in content
+        assert "dir5" in content
+        assert "dir6" in content
+        assert "file4.md" in content
+        assert "file5.md" in content
+        assert "file6.md" in content
+        assert "file7.md" in content
+        assert "file9.md" in content
+        assert "file10.md" in content
+        assert "file13.txt" in content
+        assert "file14.txt" in content
         assert (
             content.count(
                 """.\n"""
@@ -197,7 +224,8 @@ def test_nogit_exclude_multiple_patterns(test_repo):
                 """│   └── file7.md\n"""
                 """├── dir4\n"""
                 """│   ├── file10.md\n"""
-                """│   └── file9.md\n"""
+                """├── dir5\n"""
+                """│   └── file12.txt\n"""
                 """├── file4.md\n"""
                 """└── file5.md\n"""
             )
