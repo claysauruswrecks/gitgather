@@ -67,6 +67,47 @@ def test_apply_filters(test_repo: str) -> None:
     assert "file5.rtf" not in filtered_files
 
 
+def test_apply_filters_with_directories(test_repo: str) -> None:
+    # Create directories and files
+    os.makedirs(os.path.join(test_repo, "dir1"))
+    os.makedirs(os.path.join(test_repo, "dir2"))
+    os.makedirs(os.path.join(test_repo, "dir3"))
+    os.makedirs(os.path.join(test_repo, "dir4"))
+    os.makedirs(os.path.join(test_repo, "dir4", "subdir"))
+
+    paths = [
+        "file1.txt",
+        "file2.md",
+        "file3.txt",
+        "file4.rtf",
+        "file5.rtf",
+        "dir1",
+        "dir2",
+        "dir3",
+        "dir4",
+        os.path.join("dir4", "subdir"),
+    ]
+
+    filtered_paths = apply_filters(
+        paths=paths,
+        repo_path=test_repo,
+        include_patterns=["*.txt", "dir1", "dir4/subdir"],
+        exclude_patterns=["file1.txt", "dir2", "dir4", ".git"],
+    )
+
+    assert "file3.txt" in filtered_paths
+    assert "dir1" in filtered_paths
+    assert os.path.join("dir4", "subdir") in filtered_paths
+    assert "file1.txt" not in filtered_paths
+    assert "file2.md" not in filtered_paths
+    assert "file4.rtf" not in filtered_paths
+    assert "file5.rtf" not in filtered_paths
+    assert "dir2" not in filtered_paths
+    assert "dir3" not in filtered_paths
+    assert "dir4" not in filtered_paths
+    assert ".git" not in filtered_paths
+
+
 def test_generate_repo_overview(test_repo: str) -> None:
     output_file: str = os.path.join(test_repo, "output.txt")
     # Run it without tree output.
@@ -187,13 +228,13 @@ def test_nogit_exclude_multiple_patterns(test_repo):
         include=["file13.txt", "dir6"],
         exclude=["*.txt", "dir1", ".git"],
         no_git=True,
+        tree_output=True,
     )
 
     # Check that the excluded files and directories are not included in the output
     with open(output_file, "r") as f:
         content = f.read()
         assert "dir1" not in content
-        assert "dir6" not in content
         assert ".git" not in content
         assert "file1.txt" not in content
         assert "file2.txt" not in content
@@ -218,16 +259,21 @@ def test_nogit_exclude_multiple_patterns(test_repo):
         assert "file14.txt" in content
         assert (
             content.count(
+                """```\n"""
                 """.\n"""
                 """├── dir2\n"""
                 """│   ├── file6.md\n"""
                 """│   └── file7.md\n"""
                 """├── dir4\n"""
                 """│   ├── file10.md\n"""
+                """│   └── file9.md\n"""
                 """├── dir5\n"""
-                """│   └── file12.txt\n"""
+                """│   └── file13.txt\n"""
+                """├── dir6\n"""
+                """│   └── file14.txt\n"""
                 """├── file4.md\n"""
                 """└── file5.md\n"""
+                """```\n\n"""
             )
             == 1
         )

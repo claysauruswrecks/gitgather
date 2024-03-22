@@ -125,15 +125,51 @@ def apply_filters(paths, repo_path, include_patterns=None, exclude_patterns=None
         logger.debug(f"Processing path: {path}")
 
         # Check exclude file patterns first
-        if any(path == pattern for pattern in exclude_files):
+        if any(
+            os.path.relpath(path, start=repo_path) == pattern
+            for pattern in exclude_files
+        ):
             logger.debug(f"Path {path} matches exclude file pattern, skipping")
             continue
 
-        # Process glob patterns second
+        # Check exclude directory patterns
+        if any(
+            os.path.relpath(path, start=repo_path).startswith(pattern + os.sep)
+            for pattern in exclude_files
+        ):
+            logger.debug(f"Path {path} is in an excluded directory, skipping")
+            continue
+
+        # Check include directory patterns
+        logger.debug("path: %s, include_files: %s", path, include_files)
+        if any(
+            os.path.relpath(path, start=repo_path).startswith(pattern + os.sep)
+            for pattern in include_files
+        ):
+            logger.debug(f"Path {path} is in an included directory, adding")
+            filtered_paths.append(path)
+            continue
+
+        # Check include file patterns
+        logger.debug("path: %s, include_file: %s", path, include_files)
+        if any(os.path.basename(path) == pattern for pattern in include_files):
+            logger.debug(
+                f"Path {path} matches include file pattern, adding to filtered paths"
+            )
+            filtered_paths.append(path)
+            continue
+
+        # Process glob patterns
         if include_globs:
-            if any(fnmatch.fnmatch(path, pattern) for pattern in include_globs):
+            if any(
+                fnmatch.fnmatch(os.path.relpath(path, start=repo_path), pattern)
+                for pattern in include_globs
+            ):
                 logger.debug(f"Path {path} matches include glob pattern")
-                if not any(fnmatch.fnmatch(path, pattern) for pattern in exclude_globs):
+                if not any(
+                    fnmatch.fnmatch(os.path.relpath(path, start=repo_path), pattern)
+                    for pattern in exclude_globs
+                ):
                     logger.debug(
                         f"Path {path} does not match exclude glob pattern, adding to filtered paths"
                     )
@@ -145,25 +181,16 @@ def apply_filters(paths, repo_path, include_patterns=None, exclude_patterns=None
                     f"Path {path} does not match include glob pattern, skipping"
                 )
         else:
-            if not any(fnmatch.fnmatch(path, pattern) for pattern in exclude_globs):
+            if not any(
+                fnmatch.fnmatch(os.path.relpath(path, start=repo_path), pattern)
+                for pattern in exclude_globs
+            ):
                 logger.debug(
                     f"Path {path} does not match exclude glob pattern, adding to filtered paths"
                 )
                 filtered_paths.append(path)
             else:
                 logger.debug(f"Path {path} matches exclude glob pattern, skipping")
-
-        # Process include file patterns last
-        if include_files:
-            if any(path == pattern for pattern in include_files):
-                logger.debug(
-                    f"Path {path} matches include file pattern, adding to filtered paths"
-                )
-                filtered_paths.append(path)
-            else:
-                logger.debug(
-                    f"Path {path} does not match include file pattern, skipping"
-                )
 
     logger.debug(f"Filtered paths: {filtered_paths}")
     return filtered_paths
