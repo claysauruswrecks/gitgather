@@ -4,7 +4,7 @@ import logging
 import fnmatch
 from typing import LiteralString
 
-logging.basicConfig(level=logging.DEBUG)
+# Initialize the logger
 logger = logging.getLogger(__name__)
 
 
@@ -223,6 +223,9 @@ def generate_repo_overview(
     Returns:
         None
     """
+    log_level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(level=log_level)
+
     # Get all file paths in the repository
     all_file_paths = [
         os.path.join(dp, f)
